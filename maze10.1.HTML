@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rusty's Path to Safety</title>
+    <style>
+        #gameCanvas {
+            border: 1px solid #000;
+            display: grid;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        .obstacle { background-color: gray; }
+        .player { background-color: orange; }
+        .goal { background-color: green; }
+    </style>
+</head>
+<body>
+    <h1>Rusty's Path to Safety</h1>
+    <div id="gameCanvas"></div>
+    <p>Games Completed: <span id="completionCounter">0</span></p>
+    <p>Lives Remaining: <span id="livesCounter">3</span></p>
+
+    <script>
+        const cellSize = 50;
+        const maxObstaclesCap = 15; // Cap the maximum number of obstacles
+        let maxGridSize = Math.min(Math.floor(window.innerWidth / cellSize), Math.floor(window.innerHeight / cellSize));
+
+        let gridSize = 5;
+        let maxObstacles = 5;
+        const gameCanvas = document.getElementById('gameCanvas');
+        let playerPosition = { x: 0, y: 0 };
+        let goalPosition = { x: gridSize - 1, y: gridSize - 1 };
+        let obstacles = [];
+        let steps = 0;
+        let completionCount = 0;
+        let lives = 3;
+
+        function createGrid() {
+            gameCanvas.style.gridTemplateColumns = `repeat(${gridSize}, ${cellSize}px)`;
+            gameCanvas.style.gridTemplateRows = `repeat(${gridSize}, ${cellSize}px)`;
+            gameCanvas.innerHTML = '';
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.id = `cell-${x}-${y}`;
+                    if (x === playerPosition.x && y === playerPosition.y) {
+                        cell.classList.add('player');
+                    } else if (x === goalPosition.x && y === goalPosition.y) {
+                        cell.classList.add('goal');
+                    } else if (obstacles.some(ob => ob.x === x && ob.y === y)) {
+                        cell.classList.add('obstacle');
+                    }
+                    gameCanvas.appendChild(cell);
+                }
+            }
+        }
+
+        function updateGrid() {
+            document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('player'));
+            document.getElementById(`cell-${playerPosition.x}-${playerPosition.y}`).classList.add('player');
+        }
+
+        function handleKeyPress(event) {
+            const { x, y } = playerPosition;
+            let moved = false;
+            if (event.key === 'ArrowUp' && y > 0) {
+                if (!isObstacle(x, y - 1)) {
+                    playerPosition.y--;
+                    moved = true;
+                } else if (event.key === 'ArrowUp' && isObstacle(x, y - 1)) {
+                    shiftObstacle(x, y - 1, 'up');
+                }
+            }
+            if (event.key === 'ArrowDown' && y < gridSize - 1) {
+                if (!isObstacle(x, y + 1)) {
+                    playerPosition.y++;
+                    moved = true;
+                } else if (event.key === 'ArrowDown' && isObstacle(x, y + 1)) {
+                    shiftObstacle(x, y + 1, 'down');
+                }
+            }
+            if (event.key === 'ArrowLeft' && x > 0) {
+                if (!isObstacle(x - 1, y)) {
+                    playerPosition.x--;
+                    moved = true;
+                } else if (event.key === 'ArrowLeft' && isObstacle(x - 1, y)) {
+                    shiftObstacle(x - 1, y, 'left');
+                }
+            }
+            if (event.key === 'ArrowRight' && x < gridSize - 1) {
+                if (!isObstacle(x + 1, y)) {
+                    playerPosition.x++;
+                    moved = true;
+                } else if (event.key === 'ArrowRight' && isObstacle(x + 1, y)) {
+                    shiftObstacle(x + 1, y, 'right');
+                }
+            }
+            if (moved) {
+                steps++;
+                checkWinCondition();
+                if (steps % 5 === 0) {
+                    increaseDifficulty();
+                }
+            } else {
+                checkDeadEnd();
+            }
+            updateGrid();
+        }
+
+        function shiftObstacle(x, y, direction) {
+            let newX = x, newY = y;
+            let movePossible = true;
+
+            while (movePossible) {
+                if (direction === 'up' && newY > 0) newY--;
+                else if (direction === 'down' && newY < gridSize - 1) newY++;
+                else if (direction === 'left' && newX > 0) newX--;
+                else if (direction === 'right' && newX < gridSize - 1) newX++;
+                else movePossible = false;
+
+                if (isObstacle(newX, newY) || (newX === playerPosition.x && newY === playerPosition.y)) {
+                    movePossible = false;
+                } else if (!isObstacle(newX, newY) && !(newX === playerPosition.x && newY === playerPosition.y)) {
+                    obstacles = obstacles.filter(ob => !(ob.x === x && ob.y === y));
+                    obstacles.push({ x: newX, y: newY });
+                    x = newX;
+                    y = newY;
+                }
+            }
+            createGrid();
+        }
+
+        function isObstacle(x, y) {
+            return obstacles.some(ob => ob.x === x && ob.y === y);
+        }
+
+        function checkWinCondition() {
+            if (playerPosition.x === goalPosition.x && playerPosition.y === goalPosition.y) {
+                alert('You win!');
+                completionCount++;
+                document.getElementById('completionCounter').innerText = completionCount;
+                resetGame();
+            }
+        }
+
+        function checkDeadEnd() {
+            const { x, y } = playerPosition;
+            const directions = [
+                { dx: 0, dy: -1 }, // up
+                { dx: 0, dy: 1 },  // down
+                { dx: -1, dy: 0 }, // left
+                { dx: 1, dy: 0 }   // right
+            ];
+
+            let deadEnd = true;
+            for (const dir of directions) {
+                const newX = x + dir.dx;
+                const newY = y + dir.dy;
+                if (newX >= 0 && newX < gridSize && newY >= 0 && newY < gridSize && !isObstacle(newX, newY)) {
+                    deadEnd = false;
+                    break;
+                }
+            }
+
+            if (deadEnd) {
+                lives--;
+                document.getElementById('livesCounter').innerText = lives;
+                if (lives === 0) {
+                    alert('Game Over');
+                    completionCount = 0;
+                    lives = 3;
+                    document.getElementById('completionCounter').innerText = completionCount;
+                    document.getElementById('livesCounter').innerText = lives;
+                }
+                resetGame();
+            }
+        }
+
+        function generateRandomObstacles() {
+            obstacles = [];
+            while (obstacles.length < maxObstacles) {
+                const obX = Math.floor(Math.random() * gridSize);
+                const obY = Math.floor(Math.random() * gridSize);
+                if ((obX !== playerPosition.x || obY !== playerPosition.y) && 
+                    (obX !== goalPosition.x || obY !== goalPosition.y) && 
+                    !isObstacle(obX, obY)) {
+                    obstacles.push({ x: obX, y: obY });
+                }
+            }
+        }
+
+        function increaseDifficulty() {
+            if (completionCount >= 8) {
+                maxObstacles = Math.min(maxObstacles + 2, Math.floor((gridSize * gridSize) / 2));
+            } else if (maxObstacles < maxObstaclesCap) {
+                maxObstacles++;
+            } else if (gridSize < maxGridSize) {
+                gridSize++;
+            }
+            generateRandomObstacles();
+            createGrid();
+        }
+
+        function dynamicStart() {
+            do {
+                playerPosition = { x: Math.floor(Math.random() * gridSize), y: Math.floor(Math.random() * gridSize) };
+                goalPosition = { x: Math.floor(Math.random() * gridSize), y: Math.floor(Math.random() * gridSize) };
+            } while (playerPosition.x === goalPosition.x && playerPosition.y === goalPosition.y);
+
+            generateRandomObstacles();
+            createGrid();
+        }
+
+        function resetGame() {
+            steps = 0;
+            dynamicStart();
+        }
+
+        window.addEventListener('keydown', handleKeyPress);
+        dynamicStart();
+    </script>
+</body>
+</html>
